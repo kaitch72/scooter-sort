@@ -25,6 +25,11 @@
     --correct-green: #1FD35A;
     --wrong-red:     #FF2A3D;
 
+    /* NEED/WANT sign colors (2026-10-05, client: the two blues were too
+       similar). NEED = solid Persian Blue, WANT = the inverse (white fill,
+       Persian Blue outline + text) - see .roadSign--need / --want. */
+    --need-blue:     var(--persian-blue);
+
     --font-brand: "Inter", Arial, Helvetica, sans-serif;
 
     /* Fixed stage the whole game is laid out at, then uniformly scaled to
@@ -542,13 +547,15 @@ body {
 }
 
 .roadSign--need {
-    background: var(--blue-bird);
+    background: var(--need-blue);
     color: var(--white);
 }
 
 .roadSign--want {
-    background: var(--sky-blue);
-    color: var(--blue-black);
+    /* Inverse of NEED: white fill, blue outline + blue text. */
+    background: var(--white);
+    color: var(--need-blue);
+    border-color: var(--need-blue);
 }
 
 /* The sign the player actually lands on gets cloned (see flyAwaySign() in

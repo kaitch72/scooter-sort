@@ -943,8 +943,24 @@ function tickAmbientTrees(timestamp) {
 // case-sensitive even though Windows isn't).
 const LANDMARK_ASSETS = [
     { src: "images/SP-billboard.svg", widthMult: 1,    extraOutset: 0 },
-    { src: "images/SP-Branch.svg",    widthMult: 1.25, extraOutset: 6 }
+    { src: "images/SP-Branch.svg",    widthMult: 1.25, extraOutset: 6 },
+    // 2026-10-05: more background buildings (client: "more going on").
+    // Building1 is ~square, Building2 is wide (~2:1) like the branch.
+    { src: "images/Building1.svg",    widthMult: 0.9,  extraOutset: 4 },
+    { src: "images/Building2.svg",    widthMult: 1.4,  extraOutset: 8 }
 ];
+// 2026-10-05: small street props get their OWN, faster spawn stream so
+// they fill the gaps between the big set pieces above instead of taking
+// turns with them. Same travel/sizing as landmarks (widthMult is relative
+// to LANDMARK_WIDTH_NEAR), but set in closer to the road shoulder
+// (negative extraOutset) like they're on the sidewalk edge.
+const STREET_PROP_ASSETS = [
+    { src: "images/bench.svg",        widthMult: 0.35, extraOutset: -8 },
+    { src: "images/hydrant.svg",      widthMult: 0.14, extraOutset: -10 },
+    // ~square cart, a bit taller than the bench, parked just off the shoulder
+    { src: "images/icecream-cart.svg", widthMult: 0.32, extraOutset: -6 }
+];
+const STREET_PROP_SPAWN_INTERVAL_MS = 5000;
 // Kept noticeably more conservative than TREE_OUTSET_FAR/NEAR and
 // TREE_JITTER_MAX - a tree that happens to roll max jitter and drifts
 // off-frame early is invisible in a dense stream of them, but a landmark
@@ -956,12 +972,15 @@ const LANDMARK_ASSETS = [
 const LANDMARK_OUTSET = 22;       // % beyond the road edge at near size (shared scenery camera)
 const LANDMARK_JITTER_MAX = 12;   // same idea as TREE_JITTER_MAX - random extra setback, fixed per landmark for its whole trip
 const LANDMARK_WIDTH_NEAR = 44;   // % of #roadScene width at near size
-const LANDMARK_SPAWN_INTERVAL_MS = 15000;  // ~15s between landmarks - rare, not ambient filler
+const LANDMARK_SPAWN_INTERVAL_MS = 9000;   // 2026-10-05: was 15000 - client wants more background going on, and with 3 assets each one now cycles back every ~27s
 
 let landmarkSpawnNextIsLeft = true;
 let landmarkSpawnNextAssetIndex = 0;
 let activeLandmarks = [];   // { el, isLeft, jitter, startTime }
 let landmarkSpawnTimer = null;
+let streetPropSpawnNextIsLeft = false;   // starts opposite the landmarks
+let streetPropSpawnNextAssetIndex = 0;
+let streetPropSpawnTimer = null;
 let landmarkAnimFrame = null;
 
 function startLandmarkAmbience() {
@@ -974,6 +993,7 @@ function startLandmarkAmbience() {
     // call here - the first billboard/branch should ease in after a normal
     // wait like any other, not greet the player the instant the page loads.
     landmarkSpawnTimer = setInterval(spawnAmbientLandmark, LANDMARK_SPAWN_INTERVAL_MS);
+    streetPropSpawnTimer = setInterval(spawnAmbientStreetProp, STREET_PROP_SPAWN_INTERVAL_MS);
     landmarkAnimFrame = requestAnimationFrame(tickAmbientLandmarks);
 }
 
@@ -988,6 +1008,28 @@ function spawnAmbientLandmark() {
 
     const asset = LANDMARK_ASSETS[landmarkSpawnNextAssetIndex];
     landmarkSpawnNextAssetIndex = (landmarkSpawnNextAssetIndex + 1) % LANDMARK_ASSETS.length;
+
+    spawnLandmarkSprite(asset, isLeft);
+}
+
+// Street props (bench, hydrant...) - own timer and own left/right +
+// asset rotation, but the exact same sprite/travel code as landmarks.
+function spawnAmbientStreetProp() {
+
+    if (ambientPaused) {
+        return;
+    }
+
+    const isLeft = streetPropSpawnNextIsLeft;
+    streetPropSpawnNextIsLeft = !streetPropSpawnNextIsLeft;
+
+    const asset = STREET_PROP_ASSETS[streetPropSpawnNextAssetIndex];
+    streetPropSpawnNextAssetIndex = (streetPropSpawnNextAssetIndex + 1) % STREET_PROP_ASSETS.length;
+
+    spawnLandmarkSprite(asset, isLeft);
+}
+
+function spawnLandmarkSprite(asset, isLeft) {
 
     const spot = document.createElement("div");
     spot.className = "landmarkSpot";
@@ -2258,11 +2300,12 @@ function resumeAmbientMotion() {
    cleared here. */
 function stopAmbientMotion() {
 
-    [treeSpawnTimer, flowerSpawnTimer, landmarkSpawnTimer, dashSpawnTimer]
+    [treeSpawnTimer, flowerSpawnTimer, landmarkSpawnTimer, streetPropSpawnTimer, dashSpawnTimer]
         .forEach(function (t) { if (t) { clearInterval(t); } });
     treeSpawnTimer = null;
     flowerSpawnTimer = null;
     landmarkSpawnTimer = null;
+    streetPropSpawnTimer = null;
     dashSpawnTimer = null;
 
     [treeAnimFrame, flowerAnimFrame, landmarkAnimFrame, dashAnimFrame, groundScrollAnimFrame]
