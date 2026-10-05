@@ -1859,3 +1859,150 @@ body {
         display: none;
     }
 }
+
+
+/* ================= FINALE POPUP (2026-10-05, per Kayla) =================
+   The last-round popup now matches Lemonade Stand's finale: a big yellow
+   bobbing sparkle instead of the sparkle row + trophy, "You Did It!", a
+   white hero card with the final dollar total (counts up from $0), and
+   four glassy whole-game stat tiles in one row. Toggled by the .finale
+   class on .finishCard (finishGame() in game.js). Regular round popups
+   are unchanged. */
+
+.finish-finale-sparkle,
+.finish-total-hero,
+.finish-finale-stats {
+    display: none;
+}
+
+.finishCard.finale {
+    width: 1040px;
+    padding: 40px 52px 44px;
+}
+
+.finishCard.finale .results-sparkles,
+.finishCard.finale .finish-trophy-top,
+.finishCard.finale #sortBreakdown {
+    display: none;
+}
+
+.finishCard.finale .finish-finale-sparkle {
+    display: flex;
+    justify-content: center;
+    margin: 4px auto 18px;
+    line-height: 0;
+}
+
+.finishCard.finale .finish-finale-sparkle svg {
+    width: 92px;
+    height: 87px;
+    fill: #FFF025;
+    filter: drop-shadow(0 0 18px rgba(255, 240, 37, 0.55));
+    animation: finale-sparkle-bob 1.8s ease-in-out infinite;
+}
+
+@keyframes finale-sparkle-bob {
+    0%, 100% { transform: scale(1) rotate(0); }
+    50%      { transform: scale(1.14) rotate(10deg); }
+}
+
+.finishCard.finale h1 {
+    font-size: 52px;
+    font-weight: 900;
+    margin: 0 0 8px;
+}
+
+/* "Round 4 of 4" under the title, same text style as the in-between
+   round popups; carries the gap down to the hero card. */
+.finishCard.finale .round-label {
+    margin: 0 0 24px;
+}
+
+.finishCard.finale .results-message {
+    font-size: 20px;
+    margin: 0 0 24px;
+}
+
+.finishCard.finale .finish-total-hero {
+    display: block;
+    background: var(--white);
+    border-radius: 24px;
+    padding: 18px 28px 16px;
+    box-shadow: 0 10px 30px rgba(10, 23, 36, 0.3);
+    text-align: center;
+}
+
+.finish-total-label {
+    display: block;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #5b6475;
+}
+
+.finish-total-value {
+    display: block;
+    font-size: 68px;
+    font-weight: 900;
+    line-height: 1.1;
+    color: #4CA350;
+    font-variant-numeric: tabular-nums;
+}
+
+.finish-total-note {
+    margin: 4px 0 0;
+    font-size: 16px;
+    color: #5b6475;
+}
+
+.finishCard.finale .finish-finale-stats {
+    display: grid;
+    /* Each tile keeps the width it had when there were four in a row
+       ((936px content - 3 x 14px gaps) / 4), with the pair centered. */
+    grid-template-columns: repeat(2, 223.5px);
+    justify-content: center;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.finale-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+    padding: 18px 20px;
+}
+
+.finale-stat-label {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--hawkes-blue);
+}
+
+.finale-stat-value {
+    margin-top: 6px;
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+}
+
+.finishCard.finale #playAgainButton {
+    width: auto;
+    min-width: 300px;
+    height: 84px;
+    margin-top: 28px;
+    padding: 0 44px;
+    font-size: 30px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .finishCard.finale .finish-finale-sparkle svg {
+        animation: none;
+    }
+}

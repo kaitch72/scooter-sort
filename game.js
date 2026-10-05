@@ -190,6 +190,11 @@ let stars = 0;
 let correctCount = 0;
 let wrongCount = 0;
 let missCount = 0;
+// Whole-game totals for the finale popup (2026-10-05). correctCount /
+// wrongCount / missCount reset every round; these add each finished round
+// in (retries included) and only reset on a brand-new game.
+let gameCorrectTotal = 0;
+let gameMissedTotal = 0;
 let totalSorted = 0;
 
 let gameRunning = false;
@@ -2087,6 +2092,9 @@ function finishGame() {
 
     finishOutcome = outcome;
 
+    gameCorrectTotal += correctCount;
+    gameMissedTotal += wrongCount + missCount;
+
     const roundLabel = document.getElementById("roundLabel");
 
     if (roundLabel) {
@@ -2098,7 +2106,9 @@ function finishGame() {
 
     if (finishTitleText) {
         finishTitleText.textContent =
-            outcome === "retry" ? "So Close!" : "Great Job!";
+            outcome === "retry" ? "So Close!" :
+            outcome === "complete" ? "You Did It!" :
+            "Great Job!";
     }
 
     const finishSummary = document.getElementById("finishSummary");
@@ -2120,9 +2130,7 @@ function finishGame() {
     if (finishSummary) {
         finishSummary.style.display = "block";
         finishSummary.textContent =
-            outcome === "complete"
-                ? `You completed all ${ROUND_COUNT} rounds!`
-                : "";
+            "";   // 2026-10-05: finale line removed per Kayla; regular rounds never had one
     }
 
     const playAgainLabel = document.getElementById("playAgainLabel");
@@ -2144,6 +2152,15 @@ function finishGame() {
 
     const finishCardEl = document.querySelector(".finishCard");
 
+    // Finale layout (2026-10-05): see FINALE POPUP in style.css.
+    if (finishCardEl) {
+        finishCardEl.classList.toggle("finale", outcome === "complete");
+    }
+
+    if (outcome === "complete") {
+        populateFinaleStats();
+    }
+
     // Falling confetti only on the final-round popup (2026-09-23).
     if (outcome === "complete") {
         startPopupConfetti(finishCardEl);
@@ -2154,6 +2171,43 @@ function finishGame() {
     if (finishCardEl) {
         finishCardEl.scrollTop = 0;
     }
+}
+
+
+function populateFinaleStats() {
+
+    setText(document.getElementById("finaleCorrect"), String(gameCorrectTotal));
+    setText(document.getElementById("finaleMissed"), String(gameMissedTotal));
+
+    const totalEl = document.getElementById("finishTotal");
+
+    if (totalEl) {
+        countUpMoney(totalEl, stars);
+    }
+}
+
+// Same count-up as Lemonade Stand's finale total: $0 up to the real
+// amount over 1.4s (ease-out), instant under reduced motion.
+let countUpToken = 0;
+
+function countUpMoney(el, target) {
+    const token = ++countUpToken;
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || target <= 0) {
+        el.textContent = "$" + target.toFixed(2);
+        return;
+    }
+    const duration = 1400;
+    const start = performance.now();
+    function step(now) {
+        if (token !== countUpToken) return;
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = "$" + (target * eased).toFixed(2);
+        if (t < 1) requestAnimationFrame(step);
+    }
+    el.textContent = "$0.00";
+    requestAnimationFrame(step);
 }
 
 
@@ -2363,6 +2417,8 @@ function resetGame() {
     correctCount = 0;
     wrongCount = 0;
     missCount = 0;
+    gameCorrectTotal = 0;
+    gameMissedTotal = 0;
     totalSorted = 0;
 
     currentLevelIndex = 0;
@@ -2442,9 +2498,18 @@ function startNextRound() {
 }
 
 function startRealGame() {
+    startGameAtRound(1);
+}
+
+// Fresh game starting at round N (1-based). Start uses round 1; the
+// #roundN URL jump (bottom of this file) uses whichever round it names.
+function startGameAtRound(roundNumber) {
     buildGameRounds();
-    currentLevelIndex = 0;
+    currentLevelIndex = roundNumber - 1;
     levelResults = [];
+    stars = 0;
+    gameCorrectTotal = 0;
+    gameMissedTotal = 0;
     beginRide();
 }
 
@@ -2947,8 +3012,50 @@ placeStaticScenery();
 // restart is unaffected either way.
 const launchParams = new URLSearchParams(window.location.search);
 
+// ROUND JUMP (2026-10-05, per Kayla): open index.html#round1 ... #round4
+// (case-insensitive; ?round=N works too) to skip the intro popup and
+// start riding that round right away. Earlier rounds count as not
+// played, so a #round4 finale shows 1 / 4 rounds and only that round's
+// dollars. Changing the hash on an open page reloads into the new round.
+// An invalid number falls through to the normal start screen.
+//
+// RESULTS JUMP (2026-10-05, per Kayla): add "results" to the end -
+// #round2results (also #round2result, #round2-results, or
+// ?round=2&results=1) - to land straight on that round's end-of-round
+// popup instead of riding it. The round counts as completed with real
+// (zero) stats, so #round4results shows the finale with $0.00 / 0 / 0.
+// The popup's buttons work normally from there (Start goes on to the
+// next round, Play Again resets).
+function getJumpRoundFromUrl() {
+    const hashMatch = window.location.hash.match(/^#round(\d+)(?:[-_]?results?)?$/i);
+    const raw = hashMatch ? hashMatch[1] : launchParams.get("round");
+    const n = parseInt(raw, 10);
+    return (n >= 1 && n <= ROUND_COUNT) ? n : null;
+}
+
+function getJumpToResultsFromUrl() {
+    return /^#round\d+[-_]?results?$/i.test(window.location.hash) ||
+        launchParams.get("results") === "1" || launchParams.get("result") === "1";
+}
+
+const jumpRound = getJumpRoundFromUrl();
+
+window.addEventListener("hashchange", function () {
+    window.location.reload();
+});
+
 if (launchParams.get("tutorial") === "1") {
     startTutorial();
+} else if (jumpRound !== null) {
+    startGameAtRound(jumpRound);
+
+    if (getJumpToResultsFromUrl()) {
+        stopItemLoop();
+        roundItemIndex = ITEMS_PER_ROUND;   // counts as completed
+        // Deferred one tick: finishGame() uses the popup-confetti code
+        // further down this file, whose consts aren't initialized yet.
+        setTimeout(finishGame, 0);
+    }
 } else if (startScreen) {
     startScreen.style.display = "flex";
 }
