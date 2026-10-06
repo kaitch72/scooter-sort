@@ -951,7 +951,10 @@ const LANDMARK_ASSETS = [
     { src: "images/SP-Branch.svg",    widthMult: 1.25, extraOutset: 6 },
     // 2026-10-05: more background buildings (client: "more going on").
     // Building1 is ~square, Building2 is wide (~2:1) like the branch.
-    { src: "images/Building1.svg",    widthMult: 0.9,  extraOutset: 4 },
+    // 2026-10-06: Building1.svg replaced with new artwork (~1.2:1, same
+    // filename). "?v=" forces browsers to fetch the new file instead of a
+    // cached copy of the old one - bump it if the art changes again.
+    { src: "images/Building1.svg?v=2026-10-06", widthMult: 0.9,  extraOutset: 4 },
     { src: "images/Building2.svg",    widthMult: 1.4,  extraOutset: 8 }
 ];
 // 2026-10-05: small street props get their OWN, faster spawn stream so
