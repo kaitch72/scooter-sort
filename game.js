@@ -817,7 +817,7 @@ function pickTreeSetback() {
     }
     return 0;
 }
-const TREE_WIDTH_NEAR = 26;   // % of #roadScene width at near size
+const TREE_WIDTH_NEAR = 34;   // % of #roadScene width at near size (2026-10-07: was 26 - bumped up to meet the side buildings in the middle)
 const TREE_SPAWN_INTERVAL_MS = 1300; // 2026-09-23: tuned with TREE_SETBACK_BANDS below // 2026-09-23: was 950 - with the longer shared-camera trip that crowded the hill line
 
 function treeLaneX(y, outset, isLeftSide) {
@@ -892,7 +892,7 @@ function placeAmbientTree(tree, elapsed) {
     tree.el.style.width = (TREE_WIDTH_NEAR * place.scale) + "%";
     // Stack closer (bigger) trees above farther ones - spawn/DOM order
     // alone would let a newer, farther tree paint over an older, closer one.
-    tree.el.style.zIndex = Math.round(place.scale * 1000);
+    tree.el.style.zIndex = sceneZIndex(place.scale, TREE_OUTSET + tree.jitter);
     return place;
 }
 
@@ -947,15 +947,21 @@ function tickAmbientTrees(timestamp) {
 // the road edge. Filename case must match the file exactly (web hosts are
 // case-sensitive even though Windows isn't).
 const LANDMARK_ASSETS = [
-    { src: "images/SP-billboard.svg", widthMult: 1,    extraOutset: 0 },
-    { src: "images/SP-Branch.svg",    widthMult: 1.25, extraOutset: 6 },
+    // 2026-10-07: angle = degrees the flat art is turned away from facing
+    // the player, toward the road (0 = faces you, 90 = runs along the road
+    // like the buildings). Partway so it looks 3D but the logo stays readable.
+    // aspect = viewBox width / height. Sprites without "angle" stay flat.
+    { src: "images/SP-billboard.svg", widthMult: 1,    extraOutset: 0, angle: 35, aspect: 1201.8 / 937.71 }
+    // 2026-10-07: SP-Branch / Building1 / Building2 moved to SIDE_BUILDING_ASSETS
+    // below - they now stand side-on along the road instead of facing the player.
+    /* { src: "images/SP-Branch.svg",    widthMult: 1.25, extraOutset: 6 },
     // 2026-10-05: more background buildings (client: "more going on").
     // Building1 is ~square, Building2 is wide (~2:1) like the branch.
     // 2026-10-06: Building1.svg replaced with new artwork (~1.2:1, same
     // filename). "?v=" forces browsers to fetch the new file instead of a
     // cached copy of the old one - bump it if the art changes again.
     { src: "images/Building1.svg?v=2026-10-06", widthMult: 0.9,  extraOutset: 4 },
-    { src: "images/Building2.svg",    widthMult: 1.4,  extraOutset: 8 }
+    { src: "images/Building2.svg",    widthMult: 1.4,  extraOutset: 8 } */
 ];
 // 2026-10-05: small street props get their OWN, faster spawn stream so
 // they fill the gaps between the big set pieces above instead of taking
@@ -963,6 +969,8 @@ const LANDMARK_ASSETS = [
 // to LANDMARK_WIDTH_NEAR), but set in closer to the road shoulder
 // (negative extraOutset) like they're on the sidewalk edge.
 const STREET_PROP_ASSETS = [
+    // 2026-10-07 (Kayla): bench, hydrant and cart stay face-on (no "angle") -
+    // they're flat drawings, so turning them just made them thin slivers.
     { src: "images/bench.svg",        widthMult: 0.35, extraOutset: -8 },
     { src: "images/hydrant.svg",      widthMult: 0.14, extraOutset: -10 },
     // ~square cart, a bit taller than the bench, parked just off the shoulder
@@ -980,7 +988,8 @@ const STREET_PROP_SPAWN_INTERVAL_MS = 5000;
 const LANDMARK_OUTSET = 22;       // % beyond the road edge at near size (shared scenery camera)
 const LANDMARK_JITTER_MAX = 12;   // same idea as TREE_JITTER_MAX - random extra setback, fixed per landmark for its whole trip
 const LANDMARK_WIDTH_NEAR = 44;   // % of #roadScene width at near size
-const LANDMARK_SPAWN_INTERVAL_MS = 9000;   // 2026-10-05: was 15000 - client wants more background going on, and with 3 assets each one now cycles back every ~27s
+const LANDMARK_SPAWN_INTERVAL_MS = 18000;   // 2026-10-07: was 9000 - only the billboard rotates here now; the street is lined with side buildings
+// (previous note:)   // 2026-10-05: was 15000 - client wants more background going on, and with 3 assets each one now cycles back every ~27s
 
 let landmarkSpawnNextIsLeft = true;
 let landmarkSpawnNextAssetIndex = 0;
@@ -1039,6 +1048,18 @@ function spawnAmbientStreetProp() {
 
 function spawnLandmarkSprite(asset, isLeft) {
 
+    // Angled sprites (billboard, bench) are flat panels corner-pinned into
+    // perspective, same machinery as the side-on buildings.
+    if (asset.angle !== undefined) {
+        const panel = makeSideBuildingPanel(ambientLayer, asset.src, asset.aspect);
+        activeLandmarks.push({
+            el: panel.el, panel, angle: asset.angle, aspect: asset.aspect, isLeft,
+            jitter: Math.random() * LANDMARK_JITTER_MAX,
+            widthMult: asset.widthMult, extraOutset: asset.extraOutset, startTime: null
+        });
+        return;
+    }
+
     const spot = document.createElement("div");
     spot.className = "landmarkSpot";
 
@@ -1069,6 +1090,8 @@ function tickAmbientLandmarks(timestamp) {
     }
     timestamp -= ambientPausedTotalMs;
 
+    tickSideBuildings(timestamp);
+
     for (let i = activeLandmarks.length - 1; i >= 0; i--) {
 
         const landmark = activeLandmarks[i];
@@ -1079,6 +1102,16 @@ function tickAmbientLandmarks(timestamp) {
 
         const elapsed = timestamp - landmark.startTime;
         const place = sceneRoadsidePlacement(elapsed, LANDMARK_OUTSET + landmark.extraOutset + landmark.jitter, landmark.isLeft);
+
+        if (landmark.panel) {
+            placeAngledSprite(landmark, place);
+            if (place.depth <= 1) {
+                landmark.el.remove();
+                activeLandmarks.splice(i, 1);
+            }
+            continue;
+        }
+
         const y = place.y;
         const x = place.x;
         const width = LANDMARK_WIDTH_NEAR * landmark.widthMult * place.scale;
@@ -1089,7 +1122,7 @@ function tickAmbientLandmarks(timestamp) {
         // Same depth-stacking fix as the trees - keeps a landmark that's
         // gotten big and close from ever painting behind one still small
         // and distant, regardless of spawn order.
-        landmark.el.style.zIndex = Math.round(place.scale * 1000);
+        landmark.el.style.zIndex = sceneZIndex(place.scale, LANDMARK_OUTSET + landmark.extraOutset + landmark.jitter);
 
         if (place.depth <= 1) {
             landmark.el.remove();
@@ -1098,6 +1131,499 @@ function tickAmbientLandmarks(timestamp) {
     }
 
     landmarkAnimFrame = requestAnimationFrame(tickAmbientLandmarks);
+}
+
+/* ================= SIDE-ON STREET BUILDINGS (2026-10-07, per Kayla) =================
+   Buildings now line the street like the mockup: each one is a WALL that
+   runs along the road (parallel to it), instead of a flat sprite facing the
+   player. The art is drawn flat, straight-on (an elevation of the wall that
+   faces the road) and this code bends it into perspective.
+
+   How: each building occupies a stretch of the road in the shared scenery
+   camera's world - from depth d0 (its near end) to d1 = d0 + length. Its
+   four screen corners come straight from the same perspective formulas as
+   everything else (ground row = sceneYAtDepth, sideways offset and height
+   shrink by 1/depth), and one CSS matrix3d (a perspective "corner pin")
+   warps the flat image onto those four corners. Because the wall is a true
+   plane in the same world, the warp is exact, not an approximation.
+
+   Each side of the road gets a continuous row: the next building is placed
+   a small random gap behind the last one, so the street fills up like the
+   mockup. The image is cropped at the hill crest (so buildings slide out
+   from behind the hill like the road does) and just before the camera.
+
+   Art rules: flat elevation (no perspective drawn in), ground line at the
+   bottom of the artboard. On the left side the image's LEFT edge is the
+   near end; on the right side its RIGHT edge is - so nothing is mirrored and
+   text on signs reads correctly on both sides.
+
+   Tuning knobs:
+   - SCENE_PCT_PER_DEPTH_UNIT: how "long" one depth unit of road is, in the
+     same units as heights/outsets (% of scene width at near size). Bigger =
+     buildings look shorter along the road (more squashed); smaller = longer.
+   - SIDE_BUILDING_OUTSET (+ jitter): how far back from the curb the walls stand.
+   - heightNear per asset: building height (% of scene width at near size).
+   - SIDE_BUILDING_GAP_MIN/MAX: space between neighbouring buildings (depth units). */
+const SIDE_BUILDING_ASSETS = [
+    // aspect = viewBox width / height of the SVG
+    // 2026-10-07 (Kayla): only two-piece buildings (front + end wall) for now -
+    // the single-piece ones are commented out, not deleted.
+    // { src: "images/SP-Branch.svg",                 aspect: 1085.742 / 725.428, heightNear: 42 },
+    // { src: "images/Building1.svg?v=2026-10-06",    aspect: 811.573 / 662.454,  heightNear: 52 },
+    // { src: "images/Building2.svg",                 aspect: 1514.66 / 774.484,  heightNear: 45 },
+    // 2026-10-07: first two-piece building (box). "front" = the long wall that
+    // faces the road, "end" = the short wall that faces the player. Both drawn
+    // flat at the same scale. overhang = how far (in SVG units) the cornice /
+    // base strip sticks out past the wall body on each side - the wall BODY
+    // edges are what meet at the corner.
+    { src: "images/building1-front.svg?v=2026-10-07b", aspect: 701.307 / 460.763, heightNear: 45,
+      viewH: 460.763, overhang: 25.507,
+      end: { src: "images/building1-side.svg?v=2026-10-07b", aspect: 431.307 / 460.763 },
+      roofColor: "#824d3b" },  // flat roof drawn in code (the camera sits a little above the rooftops)
+    // Peaked-roof house: the gable is on the road-facing wall, so the roof
+    // ridge runs straight out from the road. The end piece has the roof slope
+    // drawn above the wall - roofSplitY is the SVG y where roof ends and wall
+    // (incl. the trim band) begins; that top slice is tilted back so it rises
+    // from the eave up to the ridge at the middle of the building.
+    // innerOverhang = trim sticking past the wall on the ROAD side of the end
+    // piece (its left edge as drawn); 0 here - the overhang is on the outer side.
+    // Both pieces are drawn at the same scale.
+    { src: "images/building2-front.svg", aspect: 1149.715 / 587.879, heightNear: 62,
+      viewH: 587.879, overhang: 89.645,
+      end: { src: "images/building2-side.svg", aspect: 514.624 / 540.65, viewH: 540.65,
+             innerOverhang: 0, roofSplitY: 183.5 } },
+    // Security Plus branch (two-piece). Has words on both pieces, so it only
+    // ever goes on the LEFT side of the road (onlySide) and its end piece is
+    // never mirrored - it was drawn as seen from there, road on its right
+    // (end.roadEdge). Both SVGs have empty space below the building, so
+    // groundY = SVG y of the ground line. roofTopY = top of the sign/parapet,
+    // where the flat roof sits.
+    // 2026-10-07: front re-exported cropped tight (sign top at 0, ground at
+    // the bottom). Same scale as before (0.09664 per SVG unit), so the side
+    // piece - still with its empty space below, hence its groundY - lines up.
+    { src: "images/building3-front.svg?v=2026-10-07d", aspect: 694.311 / 463.897, heightNear: 44.83,
+      viewH: 463.897, overhang: 47.121, roofTopY: 0,
+      onlySide: "left",
+      end: { src: "images/building3-side.svg", aspect: 600.069 / 645.835, viewH: 645.835,
+             groundY: 486.388, innerOverhang: 0, roadEdge: "right" },
+      roofColor: "#c9b18d" },
+    // Peaked-roof house #2 (same setup as building2). The roof on the end
+    // piece overhangs the wall by 41.195 on both sides, so innerOverhang is
+    // that (the roof eave pokes slightly past the road-facing wall, like a
+    // real eave). Ground line is the bottom of both artboards.
+    { src: "images/building4-front.svg?v=2026-10-07c", aspect: 695.982 / 569.569, heightNear: 57.3,
+      viewH: 569.569, overhang: 71.019,
+      // 2026-10-07: side piece redrawn (deeper house) - new viewBox 392.812 x 538.871,
+      // roof overhang 22.266 each side, roof/wall split at 241.441. "?v=" makes
+      // browsers fetch the re-uploaded files instead of a cached copy - bump it
+      // if the art changes again under the same name.
+      end: { src: "images/building4-side.svg?v=2026-10-07c", aspect: 392.812 / 531.828, viewH: 531.828,
+             innerOverhang: 22.266, roofSplitY: 241.441 } },
+    // Two-story brick building, flat roof. No trim overhang on either piece
+    // (everything runs full width), ground line at the bottom of both. The
+    // roof sits on top of the cornice (roofTopY = 78.48); the raised center
+    // block above that is drawn on both walls. At this height the camera is
+    // usually level with or below the roof, so the roof often isn't visible -
+    // that's correct, not a bug.
+    { src: "images/building5-front.svg", aspect: 955.349 / 699.657, heightNear: 66,
+      viewH: 699.657, overhang: 0, roofTopY: 78.48,
+      end: { src: "images/building5-side.svg", aspect: 672.703 / 699.657 },
+      roofColor: "#9c4a36" },
+    // Purple shop - same template/dimensions as building1 (same overhang,
+    // ground at the bottom), flat roof in its trim purple.
+    { src: "images/building6-front.svg", aspect: 701.307 / 460.763, heightNear: 45,
+      viewH: 460.763, overhang: 25.507,
+      end: { src: "images/building6-side.svg", aspect: 431.307 / 460.763 },
+      roofColor: "#77699c" },
+    // Red barn (gambrel roof), set up like the peaked-roof houses: gable on
+    // the front piece, roof slope across the top of the end piece (split at
+    // 209.08, the bottom of the cream roof band). Roof overhangs the wall by
+    // 17.454 on each side of the end piece. Ground = bottom of both artboards.
+    { src: "images/building7-front.svg", aspect: 609.8 / 573.711, heightNear: 58,
+      viewH: 573.711, overhang: 32.965,
+      end: { src: "images/building7-side.svg", aspect: 578.779 / 524.976, viewH: 524.976,
+             innerOverhang: 17.454, roofSplitY: 209.08 } }
+];
+const SCENE_PCT_PER_DEPTH_UNIT = 55;
+const SIDE_BUILDING_OUTSET = 36;        // % beyond the road edge at near size - trees closer than this pass in FRONT of the walls
+const SIDE_BUILDING_JITTER_MAX = 8;     // random extra setback per building
+// 2026-10-07 (Kayla: "too busy... more spread out and occasional"): was
+// 0.12-0.55 (a packed city street). Now a few buildings at a time with open
+// grass/trees between them. The hill crest is ~11.5 depth units away, so
+// roughly 1-3 buildings per side are on screen at once.
+const SIDE_BUILDING_GAP_MIN = 2.5;      // depth units between buildings
+const SIDE_BUILDING_GAP_MAX = 5.5;
+const SIDE_BUILDING_NEAR_CLIP = 0.3;    // crop the wall here (it's far off-screen by then) so the math never reaches the camera
+const SIDE_BUILDING_IMG_H = 1000;       // local raster height in px - big enough to stay crisp up close
+// Road half-width at depth 1, in % of scene width (road edges meet at the vanishing point).
+const SCENE_ROAD_HALF_WIDTH_NEAR = -ROAD_EDGE_X_PER_Y * SCENE_DEPTH_K;
+
+let activeSideBuildings = [];   // { el, img, isLeft, d0Start, length, outset, height, aspect, startTime }
+const sideBuildingLast = { left: null, right: null };
+const sideBuildingNextAsset = { left: 0, right: 1 };
+
+// Stacking inside #ambientLayer (2026-10-07 fix - Kayla saw trees cut in half
+// by buildings):
+// - Things between the road and the building line (roadside trees, bench,
+//   billboard, flowers) always paint in front of buildings: 5000+.
+// - Things set back further than the building line compete with buildings
+//   by DEPTH: z = 1000 / depth for both. A field tree nearer to the player
+//   than a building's near end paints in front of it; one level with or
+//   beyond it (beside/behind the building) paints behind it.
+//   (Before, every set-back tree went behind every building - so a tree
+//   standing in front of a building got its top cut off.)
+function sceneZIndex(scale, worldOutset) {
+    const z = Math.round(scale * 1000);
+    return worldOutset < SIDE_BUILDING_OUTSET ? 5000 + z : z;
+}
+
+// Corner pin: the matrix3d that maps a w x h box (origin top-left) onto the
+// quad p0 (top-left), p1 (top-right), p2 (bottom-right), p3 (bottom-left).
+function cornerPinMatrix(w, h, p0, p1, p2, p3) {
+    const dx1 = p1[0] - p2[0], dx2 = p3[0] - p2[0];
+    const dy1 = p1[1] - p2[1], dy2 = p3[1] - p2[1];
+    const sx = p0[0] - p1[0] + p2[0] - p3[0];
+    const sy = p0[1] - p1[1] + p2[1] - p3[1];
+    const den = dx1 * dy2 - dx2 * dy1;
+    const g = (sx * dy2 - dx2 * sy) / den;
+    const hh = (dx1 * sy - sx * dy1) / den;
+    const a = p1[0] - p0[0] + g * p1[0];
+    const b = p3[0] - p0[0] + hh * p3[0];
+    const d = p1[1] - p0[1] + g * p1[1];
+    const e = p3[1] - p0[1] + hh * p3[1];
+    return "matrix3d(" + [
+        a / w, d / w, 0, g / w,
+        b / h, e / h, 0, hh / h,
+        0, 0, 1, 0,
+        p0[0], p0[1], 0, 1
+    ].join(",") + ")";
+}
+
+function makeSideBuildingPanel(parent, src, aspect) {
+    const spot = document.createElement("div");
+    spot.className = "sideBuildingSpot";
+    const img = document.createElement("img");
+    img.className = "sideBuildingDecor";
+    img.src = src;
+    img.alt = "";
+    img.style.height = SIDE_BUILDING_IMG_H + "px";
+    img.style.width = (SIDE_BUILDING_IMG_H * aspect) + "px";
+    spot.style.height = SIDE_BUILDING_IMG_H + "px";
+    spot.style.visibility = "hidden";
+    spot.appendChild(img);
+    parent.appendChild(spot);
+    return { el: spot, img, aspect };
+}
+
+// Corner-pin one flat panel so the image slice [uLeft, uRight] (0-1 across
+// the image) lands on the screen quad tl, tr, br, bl.
+function pinSideBuildingPanel(panel, uLeft, uRight, tl, tr, br, bl, vTop, vBottom) {
+    vTop = vTop || 0;
+    vBottom = vBottom === undefined ? 1 : vBottom;
+    const imgW = SIDE_BUILDING_IMG_H * panel.aspect;
+    const w = Math.max(0.5, (uRight - uLeft) * imgW);
+    const h = Math.max(0.5, (vBottom - vTop) * SIDE_BUILDING_IMG_H);
+    panel.el.style.width = w + "px";
+    panel.el.style.height = h + "px";
+    panel.img.style.left = (-uLeft * imgW) + "px";
+    panel.img.style.top = (-vTop * SIDE_BUILDING_IMG_H) + "px";
+    panel.el.style.transform = cornerPinMatrix(w, h, tl, tr, br, bl);
+    panel.el.style.visibility = "visible";
+}
+
+function spawnSideBuilding(isLeft, d0Start, timestamp) {
+    const key = isLeft ? "left" : "right";
+    // Next asset in this side's rotation, skipping any that are locked to
+    // the other side of the road (onlySide).
+    let asset = null;
+    for (let k = 0; k < SIDE_BUILDING_ASSETS.length && !asset; k++) {
+        const candidate = SIDE_BUILDING_ASSETS[sideBuildingNextAsset[key] % SIDE_BUILDING_ASSETS.length];
+        sideBuildingNextAsset[key] = (sideBuildingNextAsset[key] + 1) % SIDE_BUILDING_ASSETS.length;
+        if (!candidate.onlySide || candidate.onlySide === key) {
+            asset = candidate;
+        }
+    }
+    if (!asset) {
+        return null;
+    }
+
+    // One wrapper per building (holds the front wall and, if it has one, the
+    // end wall) so they stack together and get removed together.
+    const wrap = document.createElement("div");
+    wrap.className = "sideBuildingGroup";
+    ambientLayer.appendChild(wrap);
+
+    // World units: % of scene width at near size. svgScale converts SVG
+    // units to that, so both pieces share one scale.
+    const viewH = asset.viewH || 1;
+    const svgScale = asset.heightNear / viewH;
+    const overhangPct = (asset.overhang || 0) * svgScale;
+    const front = makeSideBuildingPanel(wrap, asset.src, asset.aspect);
+    let roof = null;
+    if (asset.end && asset.roofColor) {
+        // Added first so it stacks under both walls (their cornices overlap its edges).
+        roof = document.createElement("div");
+        roof.className = "sideBuildingRoof";
+        roof.style.background = asset.roofColor;
+        roof.style.visibility = "hidden";
+        wrap.appendChild(roof);
+    }
+    const end = asset.end ? makeSideBuildingPanel(wrap, asset.end.src, asset.end.aspect) : null;
+    // Peaked roof: the top slice of the end image gets its own panel.
+    const endRoof = (asset.end && asset.end.roofSplitY) ? makeSideBuildingPanel(wrap, asset.end.src, asset.end.aspect) : null;
+    const endViewH = asset.end ? (asset.end.viewH || viewH) : viewH;
+    // groundY: SVG y of the ground line (defaults to the bottom of the artboard).
+    const frontGroundY = asset.groundY || viewH;
+    const endGroundY = asset.end ? (asset.end.groundY || endViewH) : endViewH;
+
+    const building = {
+        el: wrap, front, end, roof, endRoof, isLeft, d0Start,
+        frontGroundV: frontGroundY / viewH,
+        endGroundV: endGroundY / endViewH,
+        endHeightPct: endGroundY * svgScale,
+        roofHeightPct: (frontGroundY - (asset.roofTopY || 0)) * svgScale,
+        endRoadOnRight: !!(asset.end && asset.end.roadEdge === "right"),
+        endInnerOverhangPct: asset.end ? (asset.end.innerOverhang !== undefined ? asset.end.innerOverhang : (asset.overhang || 0)) * svgScale : 0,
+        endSplitV: (asset.end && asset.end.roofSplitY) ? asset.end.roofSplitY / endViewH : 0,
+        height: frontGroundY * svgScale,   // top of the front image, above the ground line
+        // Full image length along the road (overhangs included), in depth units.
+        length: asset.heightNear * asset.aspect / SCENE_PCT_PER_DEPTH_UNIT,
+        overhangDepth: overhangPct / SCENE_PCT_PER_DEPTH_UNIT,
+        overhangPct,
+        endWidthPct: end ? endViewH * svgScale * asset.end.aspect : 0,
+        endOuterOverhangPct: asset.end ? (asset.end.outerOverhang !== undefined ? asset.end.outerOverhang
+            : (asset.end.innerOverhang !== undefined ? asset.end.innerOverhang : (asset.overhang || 0))) * svgScale : 0,
+        outset: SIDE_BUILDING_OUTSET + Math.random() * SIDE_BUILDING_JITTER_MAX,
+        startTime: timestamp
+    };
+    activeSideBuildings.push(building);
+    sideBuildingLast[key] = building;
+    return building;
+}
+
+function sideBuildingDepths(building, timestamp) {
+    // startTime is null for buildings planted by prefillSideBuildings() until
+    // the first live frame claims them - until then they sit at d0Start.
+    const elapsed = building.startTime === null ? 0 : timestamp - building.startTime;
+    const d0 = building.d0Start - SCENE_CAMERA_SPEED * elapsed;
+    return { d0, d1: d0 + building.length };
+}
+
+// Returns false once the building has fully passed out of frame.
+function placeSideBuilding(building, timestamp, wPx, hPx) {
+    const { d0, d1 } = sideBuildingDepths(building, timestamp);
+    const L = building.length;
+    const X = SCENE_ROAD_HALF_WIDTH_NEAR + building.outset;   // % of width at depth 1 - the road-facing wall's plane
+
+    // Whole building is past the screen edge (the front wall's far end is its innermost point).
+    if (d1 <= SIDE_BUILDING_NEAR_CLIP || X / d1 > 52) {
+        return false;
+    }
+
+    const side = building.isLeft ? -1 : 1;
+    // Screen point for a spot on the building: lateral = % of width out
+    // from the road's center line, at depth `depth`, `h` up from the ground.
+    function pt(lateral, depth, h) {
+        const x = (50 + side * lateral / depth) / 100 * wPx;
+        const yGround = (SCENE_VANISH_Y + SCENE_DEPTH_K / depth) / 100 * hPx;
+        return [x, yGround - h / 100 * wPx / depth];
+    }
+    const H = building.height;
+
+    // Same depth scale as set-back trees/flowers (see sceneZIndex), keyed on
+    // the building's near end: nearer buildings on top of farther ones, and a
+    // set-back tree is in front only if it's nearer than this building.
+    building.el.style.zIndex = Math.round(1000 / Math.max(d0, SIDE_BUILDING_NEAR_CLIP));
+
+    // --- Front wall (runs along the road) ---
+    const near = Math.max(d0, SIDE_BUILDING_NEAR_CLIP);
+    const far = Math.min(d1, SCENE_CREST_DEPTH);
+    if (near >= far) {
+        building.front.el.style.visibility = "hidden";   // still behind the hill
+    } else {
+        // Left side: image left edge = near end. Right side: image left edge = far end.
+        const dLeft = building.isLeft ? near : far;
+        const dRight = building.isLeft ? far : near;
+        const uLeft = building.isLeft ? (near - d0) / L : (d1 - far) / L;
+        const uRight = building.isLeft ? (far - d0) / L : (d1 - near) / L;
+        pinSideBuildingPanel(building.front, uLeft, uRight,
+            pt(X, dLeft, H), pt(X, dRight, H), pt(X, dRight, 0), pt(X, dLeft, 0),
+            0, building.frontGroundV);
+    }
+
+    // --- End wall (faces the player, at the front wall's near body corner) ---
+    if (building.end) {
+        const dEnd = d0 + building.overhangDepth;
+        const hidePieces = function () {
+            building.end.el.style.visibility = "hidden";
+            if (building.endRoof) { building.endRoof.el.style.visibility = "hidden"; }
+        };
+        if (dEnd <= SIDE_BUILDING_NEAR_CLIP || dEnd >= SCENE_CREST_DEPTH) {
+            hidePieces();
+        } else {
+            // The image's LEFT edge is its road side (as drawn). Always put
+            // that edge at the road, so on the left side of the street it
+            // shows mirrored - the way you'd really see that wall from there.
+            const inner = X - building.endInnerOverhangPct;
+            const outer = inner + building.endWidthPct;
+            const EH = building.endHeightPct;
+            const split = building.endSplitV;
+            const groundV = building.endGroundV;
+            const eaveH = EH * (1 - split / groundV);   // height of the wall part (top of trim band)
+            // Which lateral position the image's left/right edge goes to.
+            // Default: left edge = road side (mirrors on the left side of the
+            // street). roadEdge "right": right edge = road side, never mirrored
+            // on the left side (for art with words on it).
+            const latL = building.endRoadOnRight ? outer : inner;
+            const latR = building.endRoadOnRight ? inner : outer;
+            pinSideBuildingPanel(building.end, 0, 1,
+                pt(latL, dEnd, eaveH), pt(latR, dEnd, eaveH), pt(latR, dEnd, 0), pt(latL, dEnd, 0),
+                split, groundV);
+            building.end.el.style.zIndex = 2;
+            if (building.endRoof) {
+                // Roof slope: bottom edge on the eave (at the end wall), top
+                // edge on the ridge - front wall's full height, halfway along it.
+                const dRidge = Math.min(d0 + L / 2, SCENE_CREST_DEPTH);
+                pinSideBuildingPanel(building.endRoof, 0, 1,
+                    pt(latL, dRidge, H), pt(latR, dRidge, H), pt(latR, dEnd, eaveH), pt(latL, dEnd, eaveH),
+                    0, split);
+                building.endRoof.el.style.zIndex = 1;
+            }
+        }
+    }
+
+    // --- Flat roof (only when the camera is above it, i.e. it's actually visible) ---
+    if (building.roof) {
+        const camHeightPct = SCENE_DEPTH_K / 100 * hPx / wPx * 100;   // camera height in the same units as H
+        const rNear = Math.max(d0 + building.overhangDepth, SIDE_BUILDING_NEAR_CLIP);
+        const rFar = Math.min(d1 - building.overhangDepth, SCENE_CREST_DEPTH);
+        const RH = building.roofHeightPct;
+        if (RH >= camHeightPct || rNear >= rFar) {
+            building.roof.style.visibility = "hidden";
+        } else {
+            const inner = X;
+            const outer = X - building.endInnerOverhangPct + building.endWidthPct - building.endOuterOverhangPct;
+            building.roof.style.transform = cornerPinMatrix(100, 100,
+                pt(inner, rNear, RH), pt(inner, rFar, RH), pt(outer, rFar, RH), pt(outer, rNear, RH));
+            building.roof.style.visibility = "visible";
+        }
+    }
+    return true;
+}
+
+function tickSideBuildings(timestamp) {
+    if (!ambientLayer) {
+        return;
+    }
+    // Keep each side's row topped up: the next building goes a random gap
+    // behind the last one, and is placed (hidden) as soon as there's room
+    // for it to slide out from behind the hill.
+    // Prefilled buildings start moving from where they were planted.
+    activeSideBuildings.forEach(function (building) {
+        if (building.startTime === null) {
+            building.startTime = timestamp;
+        }
+    });
+
+    [true, false].forEach(function (isLeft) {
+        const last = sideBuildingLast[isLeft ? "left" : "right"];
+        if (!last) {
+            // First building per side: stagger the two sides a little.
+            spawnSideBuilding(isLeft, SCENE_CREST_DEPTH + (isLeft ? 0 : 0.35), timestamp);
+            return;
+        }
+        const lastFar = sideBuildingDepths(last, timestamp).d1;
+        if (lastFar < SCENE_CREST_DEPTH + 0.05) {
+            const gap = SIDE_BUILDING_GAP_MIN + Math.random() * (SIDE_BUILDING_GAP_MAX - SIDE_BUILDING_GAP_MIN);
+            spawnSideBuilding(isLeft, lastFar + gap, timestamp);
+        }
+    });
+
+    const wPx = ambientLayer.clientWidth;
+    const hPx = ambientLayer.clientHeight;
+    for (let i = activeSideBuildings.length - 1; i >= 0; i--) {
+        const building = activeSideBuildings[i];
+        if (!placeSideBuilding(building, timestamp, wPx, hPx)) {
+            building.el.remove();
+            activeSideBuildings.splice(i, 1);
+        }
+    }
+}
+
+// 2026-10-07 (Kayla: "same way trees spawn all around at the start, do this
+// with buildings"): plants buildings all along the road before the ride
+// starts, so some are already close up instead of every one rolling in from
+// the hill. Same spacing rules as the live stream; the chain continues from
+// the last one planted. Called from prefillAmbientScenery() (page load and
+// after a reset), so they show on the frozen start screen too.
+function prefillSideBuildings() {
+    if (!ambientLayer) {
+        return;
+    }
+    [true, false].forEach(function (isLeft) {
+        // First building: anywhere from right beside the camera to one full
+        // gap out, so sometimes there's one up front and sometimes not.
+        let d0 = 0.6 + Math.random() * SIDE_BUILDING_GAP_MAX;
+        while (d0 < SCENE_CREST_DEPTH) {
+            const building = spawnSideBuilding(isLeft, d0, null);
+            if (!building) {
+                break;
+            }
+            d0 += building.length + SIDE_BUILDING_GAP_MIN + Math.random() * (SIDE_BUILDING_GAP_MAX - SIDE_BUILDING_GAP_MIN);
+        }
+    });
+    placeFrozenSideBuildings();
+}
+
+// Draw prefilled (not yet moving) buildings where they were planted.
+function placeFrozenSideBuildings() {
+    if (!ambientLayer) {
+        return;
+    }
+    const wPx = ambientLayer.clientWidth;
+    const hPx = ambientLayer.clientHeight;
+    activeSideBuildings.forEach(function (building) {
+        if (building.startTime === null) {
+            placeSideBuilding(building, 0, wPx, hPx);
+        }
+    });
+}
+// Buildings are placed in pixels, so re-place the frozen ones if the window
+// changes size before the ride starts (moving ones re-place every frame).
+window.addEventListener("resize", placeFrozenSideBuildings);
+
+// Flat sprite standing on the ground, turned `angle` degrees from facing the
+// player toward the road, centered where the flat version would stand.
+// The end nearer the player swings outward, the far end swings in toward
+// the road - so the art faces the oncoming scooter and the street. Image
+// left/right follow the same rule as building fronts, so nothing mirrors.
+function placeAngledSprite(sprite, place) {
+    const wPx = ambientLayer.clientWidth;
+    const hPx = ambientLayer.clientHeight;
+    const W = LANDMARK_WIDTH_NEAR * sprite.widthMult;   // world width, % of scene width at depth 1
+    const H = W / sprite.aspect;
+    const Xc = SCENE_ROAD_HALF_WIDTH_NEAR + LANDMARK_OUTSET + sprite.extraOutset + sprite.jitter;
+    const Dc = place.depth;
+    const rad = sprite.angle * Math.PI / 180;
+    const halfX = (W / 2) * Math.cos(rad);
+    const halfD = (W / 2) * Math.sin(rad) / SCENE_PCT_PER_DEPTH_UNIT;
+    const outerNear = [Xc + halfX, Dc - halfD];
+    const innerFar = [Xc - halfX, Dc + halfD];
+    if (outerNear[1] <= SIDE_BUILDING_NEAR_CLIP) {
+        sprite.el.style.visibility = "hidden";
+        return;
+    }
+    const side = sprite.isLeft ? -1 : 1;
+    function pt(lateral, depth, h) {
+        const x = (50 + side * lateral / depth) / 100 * wPx;
+        const yGround = (SCENE_VANISH_Y + SCENE_DEPTH_K / depth) / 100 * hPx;
+        return [x, yGround - h / 100 * wPx / depth];
+    }
+    const L = sprite.isLeft ? outerNear : innerFar;
+    const R = sprite.isLeft ? innerFar : outerNear;
+    pinSideBuildingPanel(sprite.panel, 0, 1,
+        pt(L[0], L[1], H), pt(R[0], R[1], H), pt(R[0], R[1], 0), pt(L[0], L[1], 0));
+    sprite.el.style.zIndex = sceneZIndex(place.scale, LANDMARK_OUTSET + sprite.extraOutset + sprite.jitter);
 }
 
 // --- Center-line dashes ---
@@ -1423,6 +1949,13 @@ const FLOWER_FAR_MAX = 220;
 // can read fine a bit bigger without looking out of place.
 const FLOWER_WIDTH_NEAR = 4;    // % of #roadScene width at near size
 const PATCH_WIDTH_NEAR = 8;
+// 2026-10-07 (Kayla): a bush that plops in at random on the ground. Rides
+// the same spawner as the flowers/patches (same random scatter - some by
+// the road, some out in the field), just occasionally and bigger. Anchored
+// at its base like the trees (it stands on the ground) - see .bushSpot.
+const BUSH_ASSET = "images/bush.svg";
+const BUSH_CHANCE = 0.12;       // share of flower spawns that are a bush instead (~1 every 6s)
+const BUSH_WIDTH_NEAR = 11;
 
 // Fixed world setback for one flower/patch. Floored at half its own width
 // (plus a margin) so the whole shape - not just its center - always
@@ -1430,8 +1963,7 @@ const PATCH_WIDTH_NEAR = 8;
 // overlapping it would be cut off. Since width and setback both scale by
 // the same 1/depth now, checking it once at near size holds for the
 // whole trip.
-function flowerWorldOutset(jitter, isPatch) {
-    const widthNear = isPatch ? PATCH_WIDTH_NEAR : FLOWER_WIDTH_NEAR;
+function flowerWorldOutset(jitter, widthNear) {
     return Math.max(widthNear / 2 + 1, FLOWER_OUTSET + jitter);
 }
 const FLOWER_SPAWN_INTERVAL_MS = 750; // 2026-09-23: was 560, thinned out with the trees
@@ -1472,8 +2004,13 @@ function spawnAmbientFlower(preAgeMs, forceLeft) {
     const spot = document.createElement("div");
     spot.className = "flowerSpot";
 
-    const src = FLOWER_ASSETS[Math.floor(Math.random() * FLOWER_ASSETS.length)];
+    const isBush = Math.random() < BUSH_CHANCE;
+    const src = isBush ? BUSH_ASSET : FLOWER_ASSETS[Math.floor(Math.random() * FLOWER_ASSETS.length)];
     const isPatch = src === PATCH_ASSET;
+    const widthNear = isBush ? BUSH_WIDTH_NEAR : (isPatch ? PATCH_WIDTH_NEAR : FLOWER_WIDTH_NEAR);
+    if (isBush) {
+        spot.classList.add("bushSpot");
+    }
 
     const img = document.createElement("img");
     img.className = "flowerDecor";
@@ -1489,18 +2026,18 @@ function spawnAmbientFlower(preAgeMs, forceLeft) {
         ? FLOWER_FAR_MIN + Math.random() * (FLOWER_FAR_MAX - FLOWER_FAR_MIN)
         : (Math.random() * 2 - 1) * FLOWER_JITTER_MAX;
 
-    const flower = { el: spot, isLeft, jitter, isPatch, startTime: null, preAge: isPrefill ? preAgeMs : 0 };
+    const flower = { el: spot, isLeft, jitter, isPatch, widthNear, startTime: null, preAge: isPrefill ? preAgeMs : 0 };
     activeFlowers.push(flower);
     placeAmbientFlower(flower, flower.preAge);
 }
 
 function placeAmbientFlower(flower, elapsed) {
-    const place = sceneRoadsidePlacement(elapsed, flowerWorldOutset(flower.jitter, flower.isPatch), flower.isLeft);
+    const place = sceneRoadsidePlacement(elapsed, flowerWorldOutset(flower.jitter, flower.widthNear), flower.isLeft);
     flower.el.style.left = place.x + "%";
     flower.el.style.top = place.y + "%";
-    flower.el.style.width = ((flower.isPatch ? PATCH_WIDTH_NEAR : FLOWER_WIDTH_NEAR) * place.scale) + "%";
+    flower.el.style.width = (flower.widthNear * place.scale) + "%";
     // Same depth-stacking fix as the trees.
-    flower.el.style.zIndex = Math.round(place.scale * 1000);
+    flower.el.style.zIndex = sceneZIndex(place.scale, flowerWorldOutset(flower.jitter, flower.widthNear));
     return place;
 }
 
@@ -1631,6 +2168,8 @@ function prefillAmbientScenery() {
         const isLeft = (k % 2 === 1) ? !flowerSpawnNextIsLeft : flowerSpawnNextIsLeft;
         spawnAmbientFlower(k * FLOWER_SPAWN_INTERVAL_MS, isLeft);
     }
+
+    prefillSideBuildings();
 }
 
 /* ================= QUESTIONS (item popup) ================= */
@@ -2310,6 +2849,7 @@ function startAmbientMotion() {
     startFlowerAmbience();
     startLandmarkAmbience();
     startRoadStripeAmbience();
+    startBalloonAmbience();
 
     if (game) {
         game.classList.add("riding");
@@ -2355,7 +2895,115 @@ function resumeAmbientMotion() {
    the sun pulse / cloud drift CSS animations pause again. beginRide()
    restarts all of it on Start, since each start*Ambience() guard is
    cleared here. */
+/* ================= HOT AIR BALLOON (2026-10-07, per Kayla) =================
+   Every so often a balloon drifts across the sky like the clouds - random
+   height, size, direction and speed each time, with a gentle bob - then
+   it's removed once it's off the other side. One at a time. Lives in
+   #skyLayer with the clouds and uses the same pause rule (CSS: frozen
+   unless #game has "riding"). */
+const BALLOON_FIRST_DELAY_MS = [6000, 15000];   // [min, max] after the ride starts
+const BALLOON_INTERVAL_MS = [30000, 60000];     // [min, max] between balloons
+const BALLOON_DRIFT_MS = [55000, 75000];        // time to cross the screen
+let balloonTimer = null;
+
+// 2026-10-07 (Kayla): each balloon gets a random color scheme pulled from
+// the bright colors already in the scene. balloon.svg is drawn with a
+// #ca6851 envelope and #fbe77a stripes; those two fills get swapped for a
+// pair below (basket/ropes stay as drawn). If the SVG can't be loaded as
+// text (e.g. the page opened straight from file:// instead of Live Server)
+// balloons just use the original colors.
+const BALLOON_BASE_ENVELOPE = "#ca6851";
+const BALLOON_BASE_STRIPE = "#fbe77a";
+const BALLOON_COLOR_PAIRS = [
+    ["#ca6851", "#fbe77a"],   // original: brick red + yellow
+    ["#2442d3", "#fbe77a"],   // Security Plus blue + yellow
+    ["#2442d3", "#fdf5f6"],   // Security Plus blue + white
+    ["#ed688b", "#fdf5f6"],   // awning pink + white (shop awnings)
+    ["#fbe77a", "#ed688b"],   // yellow + pink
+    ["#6db951", "#fbe77a"],   // tree green + yellow
+    ["#b44e41", "#e8e1d7"]    // barn red + cream
+];
+let balloonSvgText = null;
+let balloonLastPair = -1;
+fetch("images/balloon.svg")
+    .then(function (r) { return r.ok ? r.text() : null; })
+    .then(function (t) { balloonSvgText = t; })
+    .catch(function () { /* fall back to the plain file */ });
+
+function balloonImageSrc() {
+    if (!balloonSvgText) {
+        return "images/balloon.svg";
+    }
+    let i;
+    do {
+        i = Math.floor(Math.random() * BALLOON_COLOR_PAIRS.length);
+    } while (i === balloonLastPair && BALLOON_COLOR_PAIRS.length > 1);
+    balloonLastPair = i;
+    const pair = BALLOON_COLOR_PAIRS[i];
+    const svg = balloonSvgText
+        .split('fill="' + BALLOON_BASE_ENVELOPE + '"').join('fill="__ENV__"')
+        .split('fill="' + BALLOON_BASE_STRIPE + '"').join('fill="' + pair[1] + '"')
+        .split('fill="__ENV__"').join('fill="' + pair[0] + '"');
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+function randBetween(range) {
+    return range[0] + Math.random() * (range[1] - range[0]);
+}
+
+function scheduleBalloon(delayRange) {
+    if (balloonTimer) {
+        clearTimeout(balloonTimer);
+    }
+    balloonTimer = setTimeout(spawnBalloon, randBetween(delayRange));
+}
+
+function spawnBalloon() {
+    balloonTimer = null;
+    const sky = document.getElementById("skyLayer");
+    // Skip (and try again later) while paused or if one is still flying.
+    if (!sky || ambientPaused || sky.querySelector(".balloonDrift")) {
+        scheduleBalloon(BALLOON_INTERVAL_MS);
+        return;
+    }
+    const drift = document.createElement("div");
+    drift.className = "balloonDrift";
+    drift.style.top = (2 + Math.random() * 8).toFixed(1) + "%";   // stays above the hill line / rooftops
+    drift.style.width = (3.5 + Math.random() * 2.5).toFixed(2) + "%";
+    drift.style.animationDuration = Math.round(randBetween(BALLOON_DRIFT_MS)) + "ms";
+    drift.style.animationDirection = Math.random() < 0.5 ? "normal" : "reverse";
+    const img = document.createElement("img");
+    img.className = "balloonDecor";
+    img.src = balloonImageSrc();
+    img.alt = "";
+    img.style.animationDelay = "-" + (Math.random() * 4).toFixed(2) + "s";
+    drift.appendChild(img);
+    drift.addEventListener("animationend", function (e) {
+        if (e.target === drift) {
+            drift.remove();
+        }
+    });
+    sky.appendChild(drift);
+    scheduleBalloon(BALLOON_INTERVAL_MS);
+}
+
+function startBalloonAmbience() {
+    if (!balloonTimer) {
+        scheduleBalloon(BALLOON_FIRST_DELAY_MS);
+    }
+}
+
+function stopBalloonAmbience() {
+    if (balloonTimer) {
+        clearTimeout(balloonTimer);
+        balloonTimer = null;
+    }
+    document.querySelectorAll(".balloonDrift").forEach(function (el) { el.remove(); });
+}
+
 function stopAmbientMotion() {
+
+    stopBalloonAmbience();
 
     [treeSpawnTimer, flowerSpawnTimer, landmarkSpawnTimer, streetPropSpawnTimer, dashSpawnTimer]
         .forEach(function (t) { if (t) { clearInterval(t); } });
@@ -2378,13 +3026,16 @@ function stopAmbientMotion() {
     ambientPauseStartedAt = null;
     ambientPausedTotalMs = 0;
 
-    [activeTrees, activeFlowers, activeLandmarks, activeDashes].forEach(function (list) {
+    [activeTrees, activeFlowers, activeLandmarks, activeDashes, activeSideBuildings].forEach(function (list) {
         list.forEach(function (item) { if (item.el) { item.el.remove(); } });
     });
     activeTrees = [];
     activeFlowers = [];
     activeLandmarks = [];
     activeDashes = [];
+    activeSideBuildings = [];
+    sideBuildingLast.left = null;
+    sideBuildingLast.right = null;
 
     // Rebuild the ground tiles and the static trees/flowers from scratch,
     // same as page load (placeStaticGroundTiles only lays tiles out when

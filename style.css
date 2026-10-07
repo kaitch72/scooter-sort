@@ -382,6 +382,8 @@ body {
    road motion (ground/trees/flowers/dashes) now waits for too. */
 .sunDecor,
 .cloudDecor,
+.balloonDrift,
+.balloonDecor,
 .treeDecor {
     animation-play-state: paused;
 }
@@ -391,8 +393,39 @@ body {
    sway waits for the ride to start too. */
 #game.riding .sunDecor,
 #game.riding .cloudDecor,
+#game.riding .balloonDrift,
+#game.riding .balloonDecor,
 #game.riding .treeDecor {
     animation-play-state: running;
+}
+
+/* 2026-10-07: hot air balloon (spawned from JS - see HOT AIR BALLOON in
+   game.js). The wrapper drifts across once (direction/speed set inline),
+   the image inside bobs gently. */
+.balloonDrift {
+    position: absolute;
+    animation-name: balloonDrift;
+    animation-timing-function: linear;
+    animation-iteration-count: 1;
+    animation-fill-mode: both;
+}
+
+.balloonDecor {
+    display: block;
+    width: 100%;
+    height: auto;
+    animation: balloonBob 4.5s ease-in-out infinite;
+    -webkit-user-drag: none;
+}
+
+@keyframes balloonDrift {
+    0% { left: -10%; }
+    100% { left: 110%; }
+}
+
+@keyframes balloonBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12%); }
 }
 
 @keyframes cloudDrift {
@@ -487,6 +520,51 @@ body {
     -webkit-user-drag: none;
 }
 
+/* 2026-10-07: side-on street buildings (see SIDE-ON STREET BUILDINGS in
+   game.js). The box is placed at the layer's top-left and a per-frame
+   matrix3d corner-pins it onto the wall's four screen corners; overflow
+   crops the part of the wall that's behind the hill or past the camera. */
+.sideBuildingSpot {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    transform-origin: 0 0;
+    /* no will-change here on purpose: it makes Chrome cache the wall at the
+       tiny size it first appeared at, so it looked blurry up close */
+    user-select: none;
+}
+
+/* One per building - holds its front wall + end wall so they stack and
+   get removed together. Zero-size box at the layer's origin; the panels
+   inside position themselves with their own matrix3d. */
+.sideBuildingGroup {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+}
+
+/* Flat roof on two-piece buildings - a plain colored 100x100 box, corner-pinned like the walls. */
+.sideBuildingRoof {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100px;
+    height: 100px;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.sideBuildingDecor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+    -webkit-user-drag: none;
+}
+
 
 /* ================= FLOWERS + GRASS PATCHES (roadside detail) =================
    2026-09-16 art breakdown: the same travel-and-recycle idea as the trees,
@@ -499,6 +577,12 @@ body {
     position: absolute;
     transform: translate(-50%, -50%);
     user-select: none;
+}
+
+/* 2026-10-07: bushes ride the flower spawner but stand on the ground like
+   the trees, so they anchor at their base instead of their center. */
+.flowerSpot.bushSpot {
+    transform: translate(-50%, -100%);
 }
 
 .flowerDecor {
