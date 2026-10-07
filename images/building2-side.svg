@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 514.624 540.65">
+  <g id="Layer_72" data-name="Layer 72">
+    <rect x="0" y="225.083" width="424.979" height="315.566" fill="#ddc9a8"/>
+    <rect x="0" y="183.478" width="514.624" height="41.605" fill="#c9b18d"/>
+    <g>
+      <rect x="80.95" y="273.895" width="263.08" height="193.748" fill="#edf3f7"/>
+      <rect x="80.95" y="273.895" width="10.589" height="193.748" fill="#cbcfd1"/>
+      <rect x="207.195" y="273.895" width="10.589" height="193.748" fill="#cbcfd1"/>
+      <rect x="333.441" y="273.895" width="10.589" height="193.748" fill="#cbcfd1"/>
+      <rect x="207.49" y="153.79" width="11.14" height="251.35" transform="translate(-66.404 492.525) rotate(-90)" fill="#cbcfd1"/>
+      <rect x="203.67" y="245.094" width="11.14" height="251.35" transform="translate(-161.529 580.008) rotate(-90)" fill="#cbcfd1"/>
+      <rect x="207.49" y="336.535" width="11.14" height="251.35" transform="translate(-249.15 675.27) rotate(-90)" fill="#cbcfd1"/>
+    </g>
+    <polygon points="424.979 0 0 0 0 183.553 514.624 183.478 424.979 0" fill="#c9b18d"/>
+  </g>
+</svg>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 392.812 531.828">
+  <g id="Layer_65" data-name="Layer 65">
+    <polygon points="370.546 241.441 370.546 508.221 22.266 508.221 22.266 242.071 370.546 241.441" fill="#e8e1d7"/>
+    <g>
+      <g>
+        <rect x="127.683" y="262.067" width="137.447" height="129.57" rx="4.595" ry="4.595" fill="#7b624a"/>
+        <rect x="137.316" y="271.148" width="118.18" height="111.408" rx="1.733" ry="1.733" fill="#eaeff4"/>
+        <rect x="190.977" y="266.894" width="10.858" height="119.916" rx="1.733" ry="1.733" fill="#7b624a"/>
+        <rect x="190.977" y="266.894" width="10.858" height="119.916" rx="1.733" ry="1.733" transform="translate(523.258 130.446) rotate(90)" fill="#7b624a"/>
+      </g>
+      <rect x="189.53" y="319.318" width="13.751" height="151.433" rx="1.733" ry="1.733" transform="translate(591.441 198.629) rotate(90)" fill="#9c8060"/>
+    </g>
+    <rect width="392.812" height="241.441" fill="#7b624a"/>
+    <rect x="22.266" y="508.224" width="348.28" height="23.603" fill="#7b624a"/>
+  </g>
+</svg>

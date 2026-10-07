@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 701.307 460.763">
+  <g id="Layer_72" data-name="Layer 72">
+    <rect x="25.507" width="650.294" height="436.703" fill="#c4b7dd"/>
+    <rect x="67.584" y="83.218" width="566.139" height="60.455" rx="6.46" ry="6.46" fill="#ebeff4"/>
+    <rect y="22.763" width="701.307" height="37.132" rx="6.46" ry="6.46" fill="#77699c"/>
+    <rect x="25.507" y="436.606" width="650.294" height="24.157" fill="#77699c"/>
+    <rect x="90.045" y="104.399" width="521.217" height="18.094" rx="6.46" ry="6.46" fill="#77699c"/>
+    <rect x="274.473" y="192.858" width="350.21" height="188.766" rx="6.46" ry="6.46" fill="#443a67"/>
+    <rect x="287.004" y="209.757" width="325.147" height="154.968" rx="6.46" ry="6.46" fill="#ebeff4"/>
+    <path d="M96.506,236.945h129.889c3.565,0,6.46,2.895,6.46,6.46v193.297H90.045v-193.297c0-3.565,2.895-6.46,6.46-6.46Z" fill="#443a67"/>
+    <rect x="106.69" y="253.844" width="109.528" height="90.455" rx="3.791" ry="3.791" fill="#ebeff4"/>
+    <rect x="193.302" y="373.528" width="25.223" height="7.726" rx="3.863" ry="3.863" fill="#77699c"/>
+  </g>
+</svg>
